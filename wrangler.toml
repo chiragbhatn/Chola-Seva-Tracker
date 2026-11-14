@@ -1,5 +1,5 @@
 # Cloudflare Pages project settings for Chola Seva Tracker.
-# Step 4 of README.md: paste your D1 database ID below before the first deploy.
+# The D1 database ID below comes from step 1 of README.md (Storage & databases -> D1).
 name = "chola-seva"
 pages_build_output_dir = "./public"
 compatibility_date = "2024-11-01"
@@ -7,4 +7,4 @@ compatibility_date = "2024-11-01"
 [[d1_databases]]
 binding = "DB"
 database_name = "chola-seva"
-database_id = "PASTE-YOUR-D1-DATABASE-ID-HERE"
+database_id = "07fe6888-fca7-443b-9ef5-d3b9e98df172"
