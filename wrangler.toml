@@ -1,9 +1,15 @@
-# Cloudflare Pages project settings for Chola Seva Tracker.
-# The D1 database ID below comes from step 1 of README.md (Storage & databases -> D1).
+# Cloudflare Worker settings for Chola Seva Tracker.
+# The Worker serves the site in public/ and answers /api/* from src/worker.js.
+# `name` must match the Worker's name in the Cloudflare dashboard.
 name = "chola-seva"
-pages_build_output_dir = "./public"
+main = "src/worker.js"
 compatibility_date = "2024-11-01"
 
+[assets]
+directory = "./public"
+binding = "ASSETS"
+
+# The D1 database ID comes from step 1 of README.md (Storage & databases -> D1).
 [[d1_databases]]
 binding = "DB"
 database_name = "chola-seva"

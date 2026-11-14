@@ -1,5 +1,5 @@
 /* Chola Seva Tracker, front end.
-   Reads /api/data (Cloudflare Pages Function over D1). Everyone sees a read-only view;
+   Reads /api/data (Cloudflare Worker over D1). Everyone sees a read-only view;
    the owner unlocks logging on their phone with the ADMIN_KEY secret. */
 (function () {
   'use strict';

@@ -7,8 +7,8 @@ Hosted free on Cloudflare:
 
 | Part | What it does |
 | --- | --- |
-| Cloudflare Pages (`public/`) | The website: HTML, CSS and JavaScript |
-| Pages Functions (`functions/api/`) | The API: `/api/data` for everyone, write routes for the owner |
+| Worker static assets (`public/`) | The website: HTML, CSS and JavaScript |
+| Worker script (`src/worker.js` + `functions/api/`) | The API: `/api/data` for everyone, write routes for the owner |
 | D1 database (`schema.sql`) | Locations and chola entries |
 
 Everyone with the link can view. Only the owner can log, after unlocking with a private key
@@ -18,11 +18,12 @@ Everyone with the link can view. Only the owner can log, after unlocking with a 
 
 ```
 public/            website (index.html, app.css, app.js, icon, manifest)
-functions/api/     API routes (Cloudflare Pages Functions)
+src/worker.js      Worker entry: sends /api/* to the handlers, everything else to public/
+functions/api/     API handlers, one file per route
 lib/util.js        shared server helpers and validation
 schema.sql         creates the tables (run once)
 seed.sql           six locations + visits from 13 Oct to 14 Nov 2026 (run once)
-wrangler.toml      Cloudflare settings: paste your D1 database ID here
+wrangler.toml      Cloudflare settings: Worker name, assets folder, D1 database ID
 ```
 
 ## Deploy without installing anything (GitHub + Cloudflare dashboard)
@@ -32,16 +33,18 @@ wrangler.toml      Cloudflare settings: paste your D1 database ID here
 2. **Create the tables.** Open the database, go to *Console*, paste all of `schema.sql`, and run it.
    Then paste all of `seed.sql` and run it. If the console only accepts one statement at a time,
    run each `CREATE` and `INSERT` on its own.
-3. **Connect the database.** In `wrangler.toml`, replace `PASTE-YOUR-D1-DATABASE-ID-HERE` with the ID.
+3. **Connect the database.** Put the ID in `database_id` in `wrangler.toml`.
 4. **Put the code on GitHub.** Create a new repository and upload this whole folder.
-5. **Create the Pages project.** *Workers & Pages → Create → Pages → Connect to Git*, pick the repository.
-   Build settings: framework preset **None**, build command **empty**, build output directory **`public`**.
-   Deploy.
-6. **Set the logging key.** In the Pages project: *Settings → Variables and Secrets → Add*,
+5. **Create the Worker.** *Workers & Pages → Create → Import a repository*, pick the repository.
+   Name the Worker **`chola-seva`** (it must match `name` in `wrangler.toml`), leave the build command
+   empty and keep the deploy command **`npx wrangler deploy`**. Deploy.
+6. **Set the logging key.** In the Worker: *Settings → Variables and Secrets → Add*,
    type **Secret**, name **`ADMIN_KEY`**, value: a long private phrase only you know.
-   Then redeploy (*Deployments → latest → Retry deployment*) so the secret takes effect.
-7. **Open the site** at `https://<project-name>.pages.dev`. Tap *Owner? Unlock logging* at the bottom
-   and enter the key. On your phone, use *Add to Home screen* so it opens like an app.
+   Secrets apply straight away and stay in place on later deploys.
+7. **Open the site** at the `workers.dev` address shown on the Worker's page. Tap *Owner? Unlock logging*
+   at the bottom and enter the key. On your phone, use *Add to Home screen* so it opens like an app.
+
+Every push to the `main` branch on GitHub deploys the site again.
 
 ## Deploy with the Wrangler command line (needs Node.js)
 
@@ -64,15 +67,11 @@ npx wrangler d1 execute chola-seva --remote --file=seed.sql
 ```
 
 ```bash
-npx wrangler pages project create chola-seva --production-branch main
+npx wrangler deploy
 ```
 
 ```bash
-npx wrangler pages secret put ADMIN_KEY --project-name chola-seva
-```
-
-```bash
-npx wrangler pages deploy
+npx wrangler secret put ADMIN_KEY
 ```
 
 ### Run it on your computer first
@@ -88,7 +87,7 @@ npx wrangler d1 execute chola-seva --local --file=seed.sql
 ```
 
 ```bash
-npx wrangler pages dev
+npx wrangler dev
 ```
 
 ## Adding entries from the D1 console
