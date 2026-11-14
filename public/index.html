@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chola Seva Tracker</title>
+<meta name="description" content="Which Hanuman ji location needs fresh chola next, and the diary of every Tuesday and Saturday visit.">
+<meta name="theme-color" content="#C23A0C" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#8E2A07" media="(prefers-color-scheme: dark)">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mukta:wght@400;600;700&family=Yatra+One&display=swap">
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="topline">
+      <p class="mantra" lang="hi">॥ श्री हनुमते नमः ॥</p>
+      <p class="today" id="today"></p>
+    </div>
+    <h1 class="wordmark">Chola Seva Tracker</h1>
+    <div class="next" id="next" aria-live="polite">
+      <p class="next-when">Loading the diary</p>
+      <p class="next-name next-name-sm">One moment</p>
+      <p class="next-why">The next location to visit appears here.</p>
+    </div>
+  </div>
+  <div class="varak" aria-hidden="true"></div>
+</header>
+<main class="wrap main" id="main">
+  <section class="summary" id="summary" aria-label="Overview and streak"></section>
+  <section aria-labelledby="h-locs">
+    <div class="sec-head"><h2 class="sec" id="h-locs">Locations</h2><p class="hint">Most urgent first. Tap one for details.</p></div>
+    <ul class="round" id="locs"></ul>
+  </section>
+  <section id="plan-sec" aria-labelledby="h-plan" hidden>
+    <div class="sec-head"><h2 class="sec" id="h-plan">Next six Hanuman days</h2><p class="hint">If each visit happens as planned</p></div>
+    <ol class="plan" id="plan"></ol>
+  </section>
+  <section aria-labelledby="h-diary">
+    <div class="sec-head"><h2 class="sec" id="h-diary">Diary</h2><p class="hint">Tuesdays and Saturdays</p></div>
+    <div class="diary" id="diary"></div>
+  </section>
+  <section aria-labelledby="h-log">
+    <div class="sec-head"><h2 class="sec" id="h-log">Chola log</h2><p class="hint" id="log-count"></p></div>
+    <div id="log"></div>
+  </section>
+  <section id="settings" aria-labelledby="h-settings" hidden></section>
+  <footer class="foot" id="foot"></footer>
+</main>
+<div id="fab-root"></div>
+<div id="sheet-root"></div>
+<div id="toast-root" aria-live="polite"></div>
+<noscript><p class="wrap">This tracker needs JavaScript turned on.</p></noscript>
+<script src="app.js" defer></script>
+</body>
+</html>
