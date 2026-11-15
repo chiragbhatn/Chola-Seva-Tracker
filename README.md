@@ -18,12 +18,15 @@ Everyone with the link can view. Only the owner can log, after unlocking with a 
 
 ```
 public/            website (index.html, app.css, app.js, icon, manifest)
-src/worker.js      Worker entry: sends /api/* to the handlers, everything else to public/
+public/logic.js    Hanuman-day rules and the WhatsApp message, shared by the site and the Worker
+public/sw.js       shows the Monday/Friday reminder notification on phones
+src/worker.js      Worker entry: /api/* to the handlers, everything else to public/, plus the schedule
 functions/api/     API handlers, one file per route
-lib/util.js        shared server helpers and validation
-schema.sql         creates the tables (run once)
+lib/               server helpers: validation, data loading, push reminders
+schema.sql         creates the tables (run once on a new database)
 seed.sql           six locations + visits from 13 Oct to 14 Nov 2026 (run once)
-wrangler.toml      Cloudflare settings: Worker name, assets folder, D1 database ID
+migrations/        one-time updates for an existing database, numbered in order
+wrangler.toml      Cloudflare settings: Worker name, assets folder, D1 database ID, schedule
 ```
 
 ## Deploy without installing anything (GitHub + Cloudflare dashboard)
@@ -109,6 +112,27 @@ Location codes: `igl`, `bakhtawarpur`, `nagli`, `5-mukhi`, `jaypee-fmg`, `bio-di
 The database itself enforces the seva rules: one entry per date, and a date must be a Tuesday or
 Saturday unless `special` names the occasion.
 
+## WhatsApp sharing and reminders
+
+- **Share on WhatsApp** (everyone): the button under the next location opens WhatsApp with a ready
+  message, in English or Hindi, naming the next Hanuman day's location and the one after. Pick the
+  team group and send.
+- **Reminders** (owner's phone): at 7 pm India time every Monday and Friday, the evening before each
+  Hanuman day, the Worker sends a notification such as "Tomorrow: Nagli". Tapping it opens the share
+  screen, so the team message is two taps away.
+
+Set up reminders once:
+
+1. Run `migrations/0002_reminders.sql` in the D1 console (skip this if your database was created
+   from the current `schema.sql`).
+2. On your phone, open the site, unlock logging, and in *Settings → Reminders on this phone* tap
+   *Turn on reminders*, then allow notifications. On iPhone, first add the site to the Home Screen and
+   open it from there.
+3. Tap *Send a test reminder*. A notification should arrive within a minute.
+
+The schedule is the cron trigger in `wrangler.toml` (`30 13 * * MON,FRI`, in UTC). No WhatsApp
+account, API or payment is involved: the message is sent from your own WhatsApp.
+
 ## How the site decides
 
 - **Due date**: the Nth Tuesday or Saturday after a location's last chola (N = its target, default 6,
@@ -131,5 +155,9 @@ Saturday unless `special` names the occasion.
 | `DELETE /api/entries/:id` | owner | delete an entry |
 | `POST /api/locations` | owner | add `{name, target?}` |
 | `PUT /api/locations/:id` | owner | change `{name?, target?, active?}` |
+| `GET /api/reminder?lang=en\|hi` | everyone | next Hanuman day's location and the WhatsApp message |
+| `GET /api/push/key` | owner | public key a phone needs to turn reminders on |
+| `POST /api/push/subscribe` | owner | turn reminders on for a phone; `DELETE` turns them off |
+| `POST /api/push/test` | owner | send a reminder to every subscribed phone now |
 
 Owner routes need the key in the `x-admin-key` header.

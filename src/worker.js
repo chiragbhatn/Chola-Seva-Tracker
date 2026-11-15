@@ -8,7 +8,12 @@ import * as entries from '../functions/api/entries/index.js';
 import * as entry from '../functions/api/entries/[id].js';
 import * as locations from '../functions/api/locations/index.js';
 import * as location from '../functions/api/locations/[id].js';
+import * as reminder from '../functions/api/reminder.js';
+import * as pushKey from '../functions/api/push/key.js';
+import * as pushSubscribe from '../functions/api/push/subscribe.js';
+import * as pushTest from '../functions/api/push/test.js';
 import { fail } from '../lib/util.js';
+import { sendReminders } from '../lib/push.js';
 
 const routes = [
   [/^\/api\/data\/?$/, data],
@@ -17,6 +22,10 @@ const routes = [
   [/^\/api\/entries\/([^/]+)\/?$/, entry],
   [/^\/api\/locations\/?$/, locations],
   [/^\/api\/locations\/([^/]+)\/?$/, location],
+  [/^\/api\/reminder\/?$/, reminder],
+  [/^\/api\/push\/key\/?$/, pushKey],
+  [/^\/api\/push\/subscribe\/?$/, pushSubscribe],
+  [/^\/api\/push\/test\/?$/, pushTest],
 ];
 
 export default {
@@ -41,5 +50,15 @@ export default {
       }
     }
     return fail(404, 'not_found', 'No such API route.');
+  },
+
+  // Cron trigger (wrangler.toml): 7 pm India time every Monday and Friday, the evening before
+  // each Hanuman day. Sends the reminder to every phone that turned reminders on.
+  async scheduled(controller, env, ctx) {
+    ctx.waitUntil(
+      sendReminders(env)
+        .then((r) => console.log('reminders', JSON.stringify(r)))
+        .catch((e) => console.error('reminders failed', e))
+    );
   },
 };

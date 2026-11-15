@@ -227,6 +227,25 @@ h1, h2, h3 { text-wrap: balance; }
   place-items: center;
 }
 .icon-btn:disabled { opacity: 0.35; cursor: not-allowed; }
+a.btn { text-decoration: none; }
+.btn.ghost-sindoor { background: transparent; border-color: var(--on-sindoor-muted); color: var(--on-sindoor); }
+
+/* ---------- WhatsApp share sheet and reminders ---------- */
+.seg { display: inline-flex; align-self: flex-start; border: 1.5px solid var(--line); border-radius: 12px; padding: 3px; background: var(--paper); gap: 3px; }
+.seg-btn { min-height: 40px; padding: 6px 16px; border: 0; border-radius: 9px; background: transparent; color: var(--muted); font-weight: 700; cursor: pointer; }
+.seg-btn[aria-pressed="true"] { background: var(--sindoor-tint); color: var(--sindoor-text); }
+.share-text {
+  width: 100%;
+  min-height: 150px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  font-size: 16px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.rem-status { font-weight: 600; }
 
 .fab {
   position: fixed;

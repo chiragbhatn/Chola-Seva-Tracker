@@ -1,184 +1,12 @@
 /* Chola Seva Tracker, front end.
    Reads /api/data (Cloudflare Worker over D1). Everyone sees a read-only view;
    the owner unlocks logging on their phone with the ADMIN_KEY secret. */
-(function () {
-  'use strict';
-
-  /* ------------------------------------------------------------------
-     Hanuman-day logic. Pure functions: dates are 'YYYY-MM-DD' strings
-     in the phone's local time.
-     ------------------------------------------------------------------ */
-  const DEFAULT_TARGET = 6;
-  const MILESTONES = [11, 21, 51, 108];
-  const WD = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-  const WD_FULL = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-  const MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const MON_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-
-  const pad = (n) => String(n).padStart(2, '0');
-  const ymd = (d) => d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
-  const parse = (s) => { const p = s.split('-').map(Number); return new Date(p[0], p[1] - 1, p[2]); };
-  const isYmd = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) && ymd(parse(s)) === s;
-  const addDays = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return ymd(d); };
-  const dow = (s) => parse(s).getDay();
-  const isHD = (s) => { const w = dow(s); return w === 2 || w === 6; };
-  const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
-  const nextHD = (s) => { let d = addDays(s, 1); while (!isHD(d)) d = addDays(d, 1); return d; };
-  const lastHDOnOrBefore = (s) => { let d = s; while (!isHD(d)) d = addDays(d, -1); return d; };
-  const nthHDAfter = (s, n) => { let d = s; for (let i = 0; i < n; i++) d = nextHD(d); return d; };
-  // Tuesdays and Saturdays d with a <= d < b
-  const countHD = (a, b) => { let c = 0; let d = isHD(a) ? a : nextHD(a); while (d < b) { c++; d = nextHD(d); } return c; };
-  const clampTarget = (t) => { const n = Math.round(Number(t)); return Number.isFinite(n) && n >= 1 ? Math.min(52, n) : DEFAULT_TARGET; };
-  const plural = (n, one, many) => n + ' ' + (n === 1 ? one : (many || one + 's'));
-  const fmtDate = (s, withYear, thisYear) => {
-    const d = parse(s);
-    let t = WD[d.getDay()] + ' ' + d.getDate() + ' ' + MON[d.getMonth()];
-    if (withYear || d.getFullYear() !== thisYear) t += ' ' + d.getFullYear();
-    return t;
-  };
-  const shiftMonth = (ym, n) => { const p = ym.split('-').map(Number); const d = new Date(p[0], p[1] - 1 + n, 1); return d.getFullYear() + '-' + pad(d.getMonth() + 1); };
-
-  function normalizeData(d) {
-    d = d && typeof d === 'object' ? d : {};
-    const locations = [];
-    const ids = new Set();
-    (Array.isArray(d.locations) ? d.locations : []).forEach((l, i) => {
-      if (!l || typeof l.id !== 'string' || !l.id || ids.has(l.id)) return;
-      ids.add(l.id);
-      locations.push({
-        id: l.id,
-        name: String(l.name || '').trim().slice(0, 60) || l.id,
-        target: clampTarget(l.target),
-        sortOrder: Number.isFinite(Number(l.sortOrder)) ? Number(l.sortOrder) : i,
-        active: l.active !== false && l.active !== 0,
-      });
-    });
-    locations.sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
-    const entries = [];
-    const dates = new Set();
-    (Array.isArray(d.entries) ? d.entries : []).forEach((e) => {
-      if (!e || !isYmd(e.date) || typeof e.loc !== 'string' || dates.has(e.date)) return;
-      dates.add(e.date);
-      entries.push({
-        id: String(e.id),
-        loc: e.loc,
-        date: e.date,
-        note: String(e.note || '').slice(0, 200),
-        special: String(e.special || '').slice(0, 60),
-        createdAt: String(e.createdAt || ''),
-      });
-    });
-    entries.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
-    return { locations, entries };
-  }
-
-  function statusFor(loc, lastDate, today, order) {
-    const yr = Number(today.slice(0, 4));
-    const r = { id: loc.id, name: loc.name, target: loc.target, order, lastDate: lastDate || null };
-    if (!lastDate) { r.kind = 'none'; r.group = 0; r.label = 'No visit logged'; r.short = 'no visit logged yet'; return r; }
-    r.daysSince = daysBetween(lastDate, today);
-    r.due = nthHDAfter(lastDate, loc.target);
-    r.hdSince = countHD(nextHD(lastDate), addDays(today, 1));
-    if (r.due < today) {
-      r.kind = 'over'; r.group = 1; r.overBy = countHD(r.due, today);
-      r.label = 'Overdue by ' + plural(r.overBy, 'Hanuman day');
-      r.short = 'overdue by ' + plural(r.overBy, 'Hanuman day');
-    } else if (r.due === today) {
-      r.kind = 'today'; r.group = 2; r.label = 'Due today'; r.short = 'due today';
-    } else if (r.due === nextHD(today)) {
-      r.kind = 'soon'; r.group = 3; r.label = 'Due ' + fmtDate(r.due, false, yr); r.short = 'due ' + fmtDate(r.due, false, yr);
-    } else {
-      r.kind = 'ok'; r.group = 4; r.label = 'Fresh'; r.short = 'fresh, due ' + fmtDate(r.due, false, yr);
-    }
-    return r;
-  }
-
-  function cmpStatus(a, b) {
-    if (a.group !== b.group) return a.group - b.group;
-    if (a.group === 0) return a.order - b.order;
-    if (a.group === 1 && a.overBy !== b.overBy) return b.overBy - a.overBy;
-    if (a.group > 1 && a.due !== b.due) return a.due < b.due ? -1 : 1;
-    if (a.daysSince !== b.daysSince) return b.daysSince - a.daysSince;
-    return a.order - b.order;
-  }
-
-  function lastDates(d, today) {
-    const m = new Map();
-    d.entries.forEach((e) => { if (e.date <= today && !m.has(e.loc)) m.set(e.loc, e.date); });
-    return m;
-  }
-
-  const rankAt = (d, lastMap, day) =>
-    d.locations.filter((l) => l.active).map((l, i) => statusFor(l, lastMap.get(l.id), day, i)).sort(cmpStatus);
-
-  function onTimeStreak(entsDesc, target) {
-    const asc = entsDesc.slice().reverse();
-    let s = 0;
-    for (let i = asc.length - 1; i >= 0; i--) {
-      const ok = i === 0 || asc[i].date <= nthHDAfter(asc[i - 1].date, target);
-      if (!ok) break;
-      s++;
-    }
-    return s;
-  }
-
-  function buildModel(d, today) {
-    const rows = rankAt(d, lastDates(d, today), today);
-    rows.forEach((r) => {
-      const ents = d.entries.filter((e) => e.loc === r.id && e.date <= today);
-      r.count = ents.length;
-      r.recent = ents.slice(0, 5);
-      r.onTime = r.kind === 'over' || r.kind === 'none' ? 0 : onTimeStreak(ents, r.target);
-    });
-    return { today, rows };
-  }
-
-  // One location per Hanuman day: assign the most urgent location to each of the next n days.
-  function buildPlan(d, today, n) {
-    const lastMap = lastDates(d, today);
-    const loggedToday = d.entries.some((e) => e.date === today);
-    let day = isHD(today) && !loggedToday ? today : nextHD(today);
-    const out = [];
-    for (let i = 0; i < n; i++) {
-      const ranked = rankAt(d, lastMap, day);
-      if (!ranked.length) break;
-      out.push({ date: day, id: ranked[0].id, name: ranked[0].name });
-      lastMap.set(ranked[0].id, day);
-      day = nextHD(day);
-    }
-    return out;
-  }
-
-  // Consecutive Tuesdays and Saturdays with an entry. Today never breaks it while it is still going.
-  function sevaStreak(d, today) {
-    const days = new Set(d.entries.filter((e) => e.date <= today && isHD(e.date)).map((e) => e.date));
-    const todayPending = isHD(today) && !days.has(today);
-    if (!days.size) return { current: 0, best: 0, todayPending };
-    let day = Array.from(days).sort()[0];
-    let run = 0, best = 0;
-    while (day <= today) {
-      if (days.has(day)) { run++; if (run > best) best = run; }
-      else if (day !== today) run = 0;
-      day = nextHD(day);
-    }
-    return { current: run, best, todayPending };
-  }
-
-  // Weeks of a month as rows of { tue, sat }; null where that day falls outside the month.
-  function monthHD(ym) {
-    const p = ym.split('-').map(Number);
-    const first = ymd(new Date(p[0], p[1] - 1, 1));
-    const weeks = [];
-    const byWeek = new Map();
-    let day = isHD(first) ? first : nextHD(first);
-    while (day.slice(0, 7) === ym) {
-      const key = addDays(day, -dow(day));
-      if (!byWeek.has(key)) { const w = { tue: null, sat: null }; byWeek.set(key, w); weeks.push(w); }
-      byWeek.get(key)[dow(day) === 2 ? 'tue' : 'sat'] = day;
-      day = nextHD(day);
-    }
-    return weeks;
-  }
+import {
+  DEFAULT_TARGET, MILESTONES, WD, WD_FULL, MON, MON_FULL,
+  ymd, parse, isYmd, dow, isHD, nextHD, lastHDOnOrBefore, nthHDAfter, countHD,
+  plural, fmtDate, shiftMonth, normalizeData, statusFor, buildModel, buildPlan,
+  sevaStreak, monthHD, reminderText,
+} from './logic.js';
 
   /* ------------------------------------------------------------------
      State, storage and the API
@@ -258,6 +86,14 @@
       } else if (!quiet) loadState = 'stale';
     }
     renderAll();
+    // Opened from a reminder notification: go straight to the WhatsApp share sheet.
+    if (data && !ui.shareChecked) {
+      ui.shareChecked = true;
+      if (new URLSearchParams(location.search).get('share') === '1') {
+        history.replaceState(null, '', location.pathname);
+        openShare();
+      }
+    }
   }
 
   /* ------------------------------------------------------------------
@@ -330,9 +166,10 @@
         '<p class="next-when">' + esc(when) + '</p>' +
         '<h2 class="next-name">' + esc(p.name) + '</h2>' +
         '<p class="next-why">' + esc(why) + '</p>';
-      if (owner && isToday) {
-        h += '<div class="next-actions"><button type="button" class="btn on-sindoor" data-act="log" data-loc="' + esc(p.id) + '" data-date="' + p.date + '">Log today’s chola</button></div>';
-      }
+      h += '<div class="next-actions">' +
+        (owner && isToday ? '<button type="button" class="btn on-sindoor" data-act="log" data-loc="' + esc(p.id) + '" data-date="' + p.date + '">Log today’s chola</button>' : '') +
+        '<button type="button" class="btn ' + (owner && isToday ? 'ghost-sindoor' : 'on-sindoor') + '" data-act="share">Share on WhatsApp</button>' +
+        '</div>';
     }
     $('#next').innerHTML = h;
   }
@@ -547,11 +384,17 @@
       '<div class="sheet-actions"><button type="button" class="btn primary" data-act="set-save"' + (dirty ? '' : ' disabled') + '>Save settings</button>' +
       '<button type="button" class="btn" data-act="set-discard"' + (dirty ? '' : ' disabled') + '>Discard changes</button></div>' +
       '<hr class="rule">' +
+      '<p class="label">Reminders on this phone</p>' +
+      '<p class="hint">A notification at 7 pm every Monday and Friday, the evening before each Hanuman day. Tap it to share the plan on WhatsApp.</p>' +
+      '<p class="rem-status" id="rem-status">Checking this phone…</p>' +
+      '<div class="sheet-actions" id="rem-actions"></div>' +
+      '<hr class="rule">' +
       '<p class="label">Backup</p><p class="hint">Copies every entry as text to keep in a note or an email.</p>' +
       '<div class="sheet-actions"><button type="button" class="btn" data-act="backup">Copy backup</button>' +
       '<button type="button" class="btn quiet" data-act="lock">Lock logging on this phone</button></div>' +
       '<textarea id="backup-text" class="backup" readonly hidden></textarea>' +
       '</div>';
+    refreshReminderStatus();
   }
 
   function renderFoot() {
@@ -646,7 +489,7 @@
     const active = document.activeElement;
     const focusId = active && active.id;
     const focusAct = active && active.dataset ? (active.dataset.act || '') + '|' + (active.dataset.date || '') : '';
-    root.innerHTML = s.kind === 'unlock' ? unlockSheetHtml(s) : entrySheetHtml(s);
+    root.innerHTML = s.kind === 'unlock' ? unlockSheetHtml(s) : s.kind === 'share' ? shareSheetHtml(s) : entrySheetHtml(s);
     if (focusId && document.getElementById(focusId)) document.getElementById(focusId).focus({ preventScroll: true });
     else if (focusAct && focusAct !== '|') {
       const parts = focusAct.split('|');
@@ -882,6 +725,139 @@
     }
   }
 
+  /* ------------------------------------------------------------------
+     WhatsApp share and phone reminders
+     ------------------------------------------------------------------ */
+  const LANG_STORE = 'chola-share-lang';
+  const waLink = (text) => 'https://wa.me/?text=' + encodeURIComponent(text);
+
+  function shareTextFor(lang) {
+    const r = data && reminderText(data, todayStr(), { lang, url: location.origin + '/' });
+    return r ? r.text : '';
+  }
+
+  function openShare() {
+    if (!data) return;
+    const lang = store.get(LANG_STORE) === 'hi' ? 'hi' : 'en';
+    const text = shareTextFor(lang);
+    if (!text) { toast('Add a location first, then share the plan.'); return; }
+    openSheet({ kind: 'share', lang, text });
+  }
+
+  function shareSheetHtml(s) {
+    return (
+      '<div class="scrim" data-act="sheet-backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
+      '<div class="sheet-head"><h2 id="sheet-title">Share on WhatsApp</h2>' +
+      '<button type="button" class="icon-btn" data-act="sheet-close" aria-label="Close">×</button></div>' +
+      '<div class="seg" role="group" aria-label="Message language">' +
+      '<button type="button" class="seg-btn" data-act="share-lang" data-lang="en" aria-pressed="' + (s.lang === 'en') + '">English</button>' +
+      '<button type="button" class="seg-btn" data-act="share-lang" data-lang="hi" lang="hi" aria-pressed="' + (s.lang === 'hi') + '">हिन्दी</button>' +
+      '</div>' +
+      '<div class="field"><label class="label" for="share-text">Message, edit it if you like</label>' +
+      '<textarea id="share-text" class="share-text" rows="6">' + esc(s.text) + '</textarea></div>' +
+      '<div class="sheet-actions">' +
+      '<a class="btn primary" id="share-go" href="' + esc(waLink(s.text)) + '" target="_blank" rel="noopener">Open WhatsApp</a>' +
+      '<button type="button" class="btn" data-act="share-copy">Copy message</button></div>' +
+      '<p class="hint">WhatsApp opens with this message ready. Pick the team group and send.</p>' +
+      '</div></div>'
+    );
+  }
+
+  async function copyShare() {
+    const s = ui.sheet;
+    if (!s) return;
+    try {
+      await navigator.clipboard.writeText(s.text);
+      toast('Message copied.');
+    } catch (e) {
+      const ta = $('#share-text');
+      if (ta) { ta.focus(); ta.select(); }
+      toast('Select the message and copy it.');
+    }
+  }
+
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isIOS = () => /iPhone|iPad|iPod/.test(navigator.userAgent);
+  const fromHomeScreen = () => (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+  const b64urlToBytes = (s) => {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4));
+    return Uint8Array.from(bin, (c) => c.charCodeAt(0));
+  };
+
+  async function currentSubscription() {
+    if (!pushSupported()) return null;
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    return reg ? reg.pushManager.getSubscription() : null;
+  }
+
+  async function refreshReminderStatus() {
+    const st = $('#rem-status');
+    const act = $('#rem-actions');
+    if (!st || !act) return;
+    if (!pushSupported()) {
+      st.textContent = isIOS() && !fromHomeScreen()
+        ? 'On iPhone, first add this site to your Home Screen (Share, then Add to Home Screen) and open it from there.'
+        : 'This browser can’t show reminders. Use Chrome on Android, or the Home Screen app on iPhone.';
+      act.innerHTML = '';
+      return;
+    }
+    if (Notification.permission === 'denied') {
+      st.textContent = 'Notifications are blocked for this site. Allow them in the browser’s site settings, then come back here.';
+      act.innerHTML = '';
+      return;
+    }
+    let sub = null;
+    try { sub = await currentSubscription(); } catch (e) { sub = null; }
+    if (sub) {
+      st.textContent = 'On: this phone gets the Monday and Friday reminders.';
+      act.innerHTML = '<button type="button" class="btn" data-act="rem-test">Send a test reminder</button>' +
+        '<button type="button" class="btn quiet" data-act="rem-off">Turn off</button>';
+    } else {
+      st.textContent = 'Off on this phone.';
+      act.innerHTML = '<button type="button" class="btn primary" data-act="rem-on">Turn on reminders</button>';
+    }
+  }
+
+  async function remindersOn() {
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission !== 'granted') { refreshReminderStatus(); return; }
+      const reg = await navigator.serviceWorker.register('/sw.js');
+      await navigator.serviceWorker.ready;
+      const { publicKey } = await api('GET', '/api/push/key', null, ownerKey);
+      let sub = await reg.pushManager.getSubscription();
+      if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64urlToBytes(publicKey) });
+      await api('POST', '/api/push/subscribe', sub.toJSON());
+      toast('Reminders are on for this phone.');
+    } catch (e) {
+      toast(e && e.code ? writeError(e) : 'Could not turn on reminders on this phone.');
+    }
+    refreshReminderStatus();
+  }
+
+  async function remindersOff() {
+    try {
+      const sub = await currentSubscription();
+      if (sub) {
+        await api('DELETE', '/api/push/subscribe', { endpoint: sub.endpoint });
+        await sub.unsubscribe();
+      }
+      toast('Reminders are off for this phone.');
+    } catch (e) {
+      toast(e && e.code ? writeError(e) : 'Could not turn off reminders.');
+    }
+    refreshReminderStatus();
+  }
+
+  async function remindersTest() {
+    try {
+      const r = await api('POST', '/api/push/test', {});
+      toast(r.sent ? 'Test reminder sent. It should arrive within a minute.' : 'No phone received it. Turn reminders off and on again.');
+    } catch (e) {
+      toast(writeError(e));
+    }
+  }
+
   async function copyBackup() {
     const text = JSON.stringify(data, null, 2);
     try {
@@ -984,6 +960,19 @@
       case 'set-discard': ui.settings = null; renderSettings(); break;
       case 'set-save': saveSettings(); break;
       case 'backup': copyBackup(); break;
+      case 'share': openShare(); break;
+      case 'share-lang': {
+        if (!s || s.kind !== 'share') break;
+        s.lang = b.dataset.lang === 'hi' ? 'hi' : 'en';
+        store.set(LANG_STORE, s.lang);
+        s.text = shareTextFor(s.lang);
+        renderSheet();
+        break;
+      }
+      case 'share-copy': copyShare(); break;
+      case 'rem-on': remindersOn(); break;
+      case 'rem-off': remindersOff(); break;
+      case 'rem-test': remindersTest(); break;
       default: break;
     }
   });
@@ -994,6 +983,12 @@
     if (s && el.id === 'sh-note') { s.note = el.value; return; }
     if (s && el.id === 'sh-occ') { s.occasion = el.value; return; }
     if (s && el.id === 'unlock-key') { s.key = el.value; return; }
+    if (s && el.id === 'share-text') {
+      s.text = el.value;
+      const go = $('#share-go');
+      if (go) go.href = waLink(s.text);
+      return;
+    }
     if (el.dataset && el.dataset.set) {
       if (!ui.settings) ui.settings = clone(data.locations);
       const l = ui.settings[Number(el.dataset.i)];
@@ -1044,4 +1039,3 @@
     // Make sure the remembered key still works.
     api('GET', '/api/check', null, ownerKey).catch((e) => { if (e.code === 'wrong_key' || e.code === 'no_key_set') lockOwner('Logging was locked: the saved key no longer matches.'); });
   }
-})();
