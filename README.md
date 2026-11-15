@@ -104,7 +104,7 @@ For a special day that is not a Tuesday or Saturday, name the occasion:
 INSERT INTO entries (location_id, date, special) VALUES ('igl', '2027-04-21', 'Hanuman Jayanti');
 ```
 
-Location codes: `igl`, `bhatawarpur`, `nagli`, `5-mukhi`, `jaypee-fmg`, `bio-diversity`.
+Location codes: `igl`, `bakhtawarpur`, `nagli`, `5-mukhi`, `jaypee-fmg`, `bio-diversity`.
 
 The database itself enforces the seva rules: one entry per date, and a date must be a Tuesday or
 Saturday unless `special` names the occasion.

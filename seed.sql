@@ -3,7 +3,7 @@
 
 INSERT OR IGNORE INTO locations (id, name, target, sort_order) VALUES
   ('igl',           'IGL',           6, 1),
-  ('bhatawarpur',   'Bhatawarpur',   6, 2),
+  ('bakhtawarpur',  'Bakhtawarpur',  6, 2),
   ('nagli',         'Nagli',         6, 3),
   ('5-mukhi',       '5 Mukhi',       6, 4),
   ('jaypee-fmg',    'Jaypee FMG',    6, 5),
@@ -13,7 +13,7 @@ INSERT OR IGNORE INTO entries (location_id, date) VALUES
   ('5-mukhi',       '2026-10-13'),
   ('igl',           '2026-10-17'),
   ('nagli',         '2026-10-20'),
-  ('bhatawarpur',   '2026-10-24'),
+  ('bakhtawarpur',  '2026-10-24'),
   ('bio-diversity', '2026-10-31'),
   ('5-mukhi',       '2026-11-03'),
   ('nagli',         '2026-11-07'),
