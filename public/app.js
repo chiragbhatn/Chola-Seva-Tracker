@@ -86,14 +86,29 @@ import {
       } else if (!quiet) loadState = 'stale';
     }
     renderAll();
-    // Opened from a reminder notification: go straight to the WhatsApp share sheet.
-    if (data && !ui.shareChecked) {
-      ui.shareChecked = true;
-      if (new URLSearchParams(location.search).get('share') === '1') {
-        history.replaceState(null, '', location.pathname);
-        openShare();
-      }
+    // Opened from a reminder notification: ?share=1 opens the WhatsApp share sheet,
+    // ?log=1 opens the log sheet for today with the planned location picked.
+    if (data && !ui.linkChecked) {
+      ui.linkChecked = true;
+      const q = new URLSearchParams(location.search);
+      const share = q.get('share') === '1';
+      const log = q.get('log') === '1';
+      if (share || log) history.replaceState(null, '', location.pathname);
+      if (share) openShare();
+      else if (log) openTodayLog();
     }
+  }
+
+  function openTodayLog() {
+    if (!data) return;
+    if (!owner) {
+      ui.afterUnlock = 'log';
+      openSheet({ kind: 'unlock', key: '', err: '', busy: false, reason: 'Unlock logging on this phone to add today’s entry.' });
+      return;
+    }
+    const t = todayStr();
+    const p = buildPlan(data, t, 1)[0];
+    openEntrySheet(p && p.date === t ? { date: t, loc: p.id } : {});
   }
 
   /* ------------------------------------------------------------------
@@ -385,7 +400,7 @@ import {
       '<button type="button" class="btn" data-act="set-discard"' + (dirty ? '' : ' disabled') + '>Discard changes</button></div>' +
       '<hr class="rule">' +
       '<p class="label">Reminders on this phone</p>' +
-      '<p class="hint">A notification at 7 pm every Monday and Friday, the evening before each Hanuman day. Tap it to share the plan on WhatsApp.</p>' +
+      '<p class="hint">7 pm Monday and Friday: tomorrow’s location, ready to share on WhatsApp. 8 pm Tuesday and Saturday: a nudge, only if today’s chola isn’t logged yet.</p>' +
       '<p class="rem-status" id="rem-status">Checking this phone…</p>' +
       '<div class="sheet-actions" id="rem-actions"></div>' +
       '<hr class="rule">' +
@@ -550,6 +565,7 @@ import {
       '<div class="scrim" data-act="sheet-backdrop"><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title">' +
       '<div class="sheet-head"><h2 id="sheet-title">Unlock logging</h2>' +
       '<button type="button" class="icon-btn" data-act="sheet-close" aria-label="Close">×</button></div>' +
+      (s.reason ? '<p class="notice">' + esc(s.reason) + '</p>' : '') +
       '<p class="hint">Enter the logging key set in Cloudflare. This phone remembers it until you lock logging again.</p>' +
       '<div class="field"><label class="label" for="unlock-key">Logging key</label>' +
       '<input type="password" id="unlock-key" autocomplete="current-password" value="' + esc(s.key) + '" data-autofocus></div>' +
@@ -689,6 +705,7 @@ import {
       closeSheet();
       renderAll();
       toast('Logging unlocked on this phone.');
+      if (ui.afterUnlock === 'log') { ui.afterUnlock = null; openTodayLog(); }
     } catch (e) {
       if (!ui.sheet) return;
       ui.sheet.busy = false;
@@ -809,9 +826,10 @@ import {
     let sub = null;
     try { sub = await currentSubscription(); } catch (e) { sub = null; }
     if (sub) {
-      st.textContent = 'On: this phone gets the Monday and Friday reminders.';
-      act.innerHTML = '<button type="button" class="btn" data-act="rem-test">Send a test reminder</button>' +
-        '<button type="button" class="btn quiet" data-act="rem-off">Turn off</button>';
+      st.textContent = 'On: this phone gets both reminders.';
+      act.innerHTML = '<button type="button" class="btn sm" data-act="rem-test" data-kind="plan">Test plan reminder</button>' +
+        '<button type="button" class="btn sm" data-act="rem-test" data-kind="logcheck">Test log reminder</button>' +
+        '<button type="button" class="btn quiet sm" data-act="rem-off">Turn off</button>';
     } else {
       st.textContent = 'Off on this phone.';
       act.innerHTML = '<button type="button" class="btn primary" data-act="rem-on">Turn on reminders</button>';
@@ -849,9 +867,9 @@ import {
     refreshReminderStatus();
   }
 
-  async function remindersTest() {
+  async function remindersTest(kind) {
     try {
-      const r = await api('POST', '/api/push/test', {});
+      const r = await api('POST', '/api/push/test', { kind: kind === 'logcheck' ? 'logcheck' : 'plan' });
       toast(r.sent ? 'Test reminder sent. It should arrive within a minute.' : 'No phone received it. Turn reminders off and on again.');
     } catch (e) {
       toast(writeError(e));
@@ -972,7 +990,7 @@ import {
       case 'share-copy': copyShare(); break;
       case 'rem-on': remindersOn(); break;
       case 'rem-off': remindersOff(); break;
-      case 'rem-test': remindersTest(); break;
+      case 'rem-test': remindersTest(b.dataset.kind); break;
       default: break;
     }
   });

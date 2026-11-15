@@ -9,10 +9,11 @@ compatibility_date = "2024-11-01"
 directory = "./public"
 binding = "ASSETS"
 
-# Phone reminders: 13:30 UTC = 7 pm India time, every Monday and Friday
-# (the evening before each Tuesday and Saturday).
+# Phone reminders (times in UTC; India is UTC+5:30). Must match PLAN_CRON and LOG_CRON in lib/push.js.
+#   13:30 Mon/Fri = 7 pm India, the evening before each Hanuman day: tomorrow's plan to share.
+#   14:30 Tue/Sat = 8 pm India, on the Hanuman day: a nudge if today's chola isn't logged yet.
 [triggers]
-crons = ["30 13 * * MON,FRI"]
+crons = ["30 13 * * MON,FRI", "30 14 * * TUE,SAT"]
 
 # The D1 database ID comes from step 1 of README.md (Storage & databases -> D1).
 [[d1_databases]]

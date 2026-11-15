@@ -191,6 +191,23 @@ function relDay(s, today, lang) {
   return '';
 }
 
+// The 8 pm Tuesday/Saturday nudge: { title, body, url }. Opening it goes to the log sheet.
+export function logCheckText(d, today) {
+  const logged = d.entries.find((e) => e.date === today);
+  if (logged) {
+    const loc = d.locations.find((l) => l.id === logged.loc);
+    return { title: 'Today’s chola is logged', body: 'Logged at ' + (loc ? loc.name : 'a location') + '. Jai Hanuman.', url: '/' };
+  }
+  const plan = buildPlan(d, today, 1);
+  const where = plan.length && plan[0].date === today ? plan[0].name : '';
+  return {
+    title: 'Log today’s chola',
+    body: (isHD(today) ? 'Nothing is logged for ' + longDate(today, 'en') + ' yet.' : 'Nothing is logged yet.') +
+      (where ? ' Tap to log ' + where + '.' : ' Tap to log it.'),
+    url: '/?log=1',
+  };
+}
+
 // Returns { date, id, name, title, body, text } or null when there is nothing to plan.
 export function reminderText(d, today, opts) {
   const lang = opts && opts.lang === 'hi' ? 'hi' : 'en';

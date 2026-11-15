@@ -117,9 +117,12 @@ Saturday unless `special` names the occasion.
 - **Share on WhatsApp** (everyone): the button under the next location opens WhatsApp with a ready
   message, in English or Hindi, naming the next Hanuman day's location and the one after. Pick the
   team group and send.
-- **Reminders** (owner's phone): at 7 pm India time every Monday and Friday, the evening before each
-  Hanuman day, the Worker sends a notification such as "Tomorrow: Nagli". Tapping it opens the share
-  screen, so the team message is two taps away.
+- **Plan reminder** (owner's phone): at 7 pm India time every Monday and Friday, the evening before
+  each Hanuman day, the Worker sends a notification such as "Tomorrow: Nagli". Tapping it opens the
+  share screen, so the team message is two taps away.
+- **Log reminder** (owner's phone): at 8 pm India time every Tuesday and Saturday, if nothing is logged
+  for that day yet, a notification says "Log today's chola". Tapping it opens the log sheet with the
+  day's planned location picked. If the day is already logged, nothing is sent.
 
 Set up reminders once:
 
@@ -128,9 +131,10 @@ Set up reminders once:
 2. On your phone, open the site, unlock logging, and in *Settings → Reminders on this phone* tap
    *Turn on reminders*, then allow notifications. On iPhone, first add the site to the Home Screen and
    open it from there.
-3. Tap *Send a test reminder*. A notification should arrive within a minute.
+3. Tap *Test plan reminder* and *Test log reminder*. Each notification should arrive within a minute.
 
-The schedule is the cron trigger in `wrangler.toml` (`30 13 * * MON,FRI`, in UTC). No WhatsApp
+The schedules are the cron triggers in `wrangler.toml` (`30 13 * * MON,FRI` and `30 14 * * TUE,SAT`,
+in UTC); they must match `PLAN_CRON` and `LOG_CRON` in `lib/push.js`. No WhatsApp
 account, API or payment is involved: the message is sent from your own WhatsApp.
 
 ## How the site decides
@@ -158,6 +162,7 @@ account, API or payment is involved: the message is sent from your own WhatsApp.
 | `GET /api/reminder?lang=en\|hi` | everyone | next Hanuman day's location and the WhatsApp message |
 | `GET /api/push/key` | owner | public key a phone needs to turn reminders on |
 | `POST /api/push/subscribe` | owner | turn reminders on for a phone; `DELETE` turns them off |
-| `POST /api/push/test` | owner | send a reminder to every subscribed phone now |
+| `GET /api/notification` | everyone | what a phone shows when a reminder arrives |
+| `POST /api/push/test` | owner | send `{kind: "plan" \| "logcheck"}` to every subscribed phone now |
 
 Owner routes need the key in the `x-admin-key` header.

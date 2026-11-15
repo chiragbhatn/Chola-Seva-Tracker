@@ -1,5 +1,7 @@
-/* Service worker for Chola Seva Tracker: only shows the Monday/Friday reminder.
-   The push has no data; the text comes from /api/reminder when it arrives.
+/* Service worker for Chola Seva Tracker: only shows the reminder notifications.
+   Pushes carry no data; /api/notification says what to show:
+     - Monday/Friday 7 pm: tomorrow's location, opens the WhatsApp share screen
+     - Tuesday/Saturday 8 pm: today's chola isn't logged yet, opens the log sheet
    No fetch handler, so the site itself is never cached here. */
 
 self.addEventListener('install', () => self.skipWaiting());
@@ -7,23 +9,18 @@ self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim(
 
 self.addEventListener('push', (event) => {
   event.waitUntil((async () => {
-    let title = 'Chola seva tomorrow';
-    let body = 'Tap to share the plan on WhatsApp.';
+    let n = { title: 'Chola Seva Tracker', body: 'Open the tracker for the next Hanuman day.', url: '/', tag: 'chola-reminder' };
     try {
-      const res = await fetch('/api/reminder', { cache: 'no-store' });
-      if (res.ok) {
-        const r = await res.json();
-        if (r.title) title = r.title;
-        if (r.body) body = r.body;
-      }
+      const res = await fetch('/api/notification', { cache: 'no-store' });
+      if (res.ok) n = { ...n, ...(await res.json()) };
     } catch (e) {
       // Offline: show the generic reminder.
     }
-    await self.registration.showNotification(title, {
-      body,
-      tag: 'chola-reminder',
+    await self.registration.showNotification(n.title, {
+      body: n.body,
+      tag: n.tag,
       renotify: true,
-      data: { url: '/?share=1' },
+      data: { url: n.url || '/' },
     });
   })());
 });
